@@ -1,7 +1,8 @@
 import { useState, type Ref } from "react";
-import { Pressable, Text, View } from "react-native";
-import type { ChangedFile, DiffMode, ReviewThread } from "../shared/diff";
+import { Image, Pressable, Text, View } from "react-native";
+import type { ChangedFile, DiffMode, EditorId, ReviewThread } from "../shared/diff";
 import type { SyntaxSet } from "./colors";
+import { EDITOR_ICONS } from "./editor-icons";
 import { FileDiff, type ViewMode } from "./file-diff";
 import type { Styles } from "./styles";
 import { copyText } from "./web";
@@ -23,6 +24,8 @@ export function FileHeaderRow({
   showFull,
   threadCount,
   onThreadsPress,
+  editors,
+  onOpenInEditor,
   onToggleOpen,
   onToggleViewed,
   onToggleFull,
@@ -41,6 +44,9 @@ export function FileHeaderRow({
   threadCount: number;
   /** Opens the PR comments side panel with every thread of the PR. */
   onThreadsPress: () => void;
+  /** Installed code editors; each gets an icon button that opens the file at its first change. */
+  editors: { id: EditorId; label: string }[];
+  onOpenInEditor: (editor: EditorId) => void;
   onToggleOpen: () => void;
   onToggleViewed: () => void;
   onToggleFull: () => void;
@@ -79,6 +85,7 @@ export function FileHeaderRow({
       >
         <Text style={styles.muted}>{copied ? "✓ Copied" : "⧉"}</Text>
       </Pressable>
+      {file.status === "D" ? null : <EditorButtons editors={editors} target="file" onOpen={onOpenInEditor} styles={styles} />}
       {file.generated ? <Text style={styles.generatedBadge}>Generated</Text> : null}
       {threadCount > 0 ? (
         <Pressable accessibilityRole="button" accessibilityLabel="Show all PR comments" onPress={onThreadsPress}>
@@ -154,6 +161,36 @@ export function FileBody({
           styles={styles}
         />
       )}
+    </View>
+  );
+}
+
+/** Tight row of editor icons; only installed editors are listed. */
+export function EditorButtons({
+  editors,
+  target,
+  onOpen,
+  styles,
+}: {
+  editors: { id: EditorId; label: string }[];
+  target: "file" | "project";
+  onOpen: (editor: EditorId) => void;
+  styles: Styles;
+}) {
+  if (editors.length === 0) return null;
+  return (
+    <View style={styles.editorGroup}>
+      {editors.map((editor) => (
+        <Pressable
+          key={editor.id}
+          accessibilityRole="button"
+          accessibilityLabel={target === "file" ? `Open file in ${editor.label}` : `Open project in ${editor.label}`}
+          onPress={() => onOpen(editor.id)}
+          style={styles.editorButton}
+        >
+          <Image source={{ uri: EDITOR_ICONS[editor.id] }} style={styles.editorIcon} />
+        </Pressable>
+      ))}
     </View>
   );
 }

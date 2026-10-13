@@ -149,6 +149,28 @@ export const threadReplyRpc = defineRpc({
   output: z.object({}),
 });
 
+export const editorIdSchema = z.enum(["zed", "vscode", "intellij"]);
+export type EditorId = z.infer<typeof editorIdSchema>;
+
+/** Code editors installed on this machine. */
+export const editorsRpc = defineRpc({
+  name: "editors.list",
+  input: z.object({}),
+  output: z.object({ editors: z.array(z.object({ id: editorIdSchema, label: z.string() })) }),
+});
+
+export const openInEditorRpc = defineRpc({
+  name: "editors.open",
+  input: z.object({ directory: z.string(), mode: modeSchema, path: z.string(), editor: editorIdSchema }),
+  output: z.object({}),
+});
+
+export const openProjectInEditorRpc = defineRpc({
+  name: "editors.open.project",
+  input: z.object({ directory: z.string(), editor: editorIdSchema }),
+  output: z.object({}),
+});
+
 /** Small JSON documents the daemon keeps across restarts: panel settings, unsent comment drafts. */
 export const storeGetRpc = defineRpc({
   name: "store.get",

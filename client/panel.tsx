@@ -4,7 +4,7 @@ import { useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import { FlatList, Pressable, Text, TextInput, View, type ViewToken } from "react-native";
-import { filesRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
+import { editorsRpc, filesRpc, openInEditorRpc, openProjectInEditorRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
 import { AskContext, useAskAgent } from "./ask";
 import { readableSyntax } from "./colors";
 import { commentKey } from "./comments";
@@ -45,6 +45,9 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
   const listFiles = useRpc(filesRpc);
   const loadPalettes = useRpc(palettesRpc);
   const listThreads = useRpc(threadsRpc);
+  const listEditors = useRpc(editorsRpc);
+  const openInEditor = useRpc(openInEditorRpc);
+  const openProjectInEditor = useRpc(openProjectInEditorRpc);
   const [prefs, setPrefs] = usePrefs();
   const [showHelp, setShowHelp] = useState(false);
   const [currentPath, setCurrentPath] = useState<string | null>(null);
@@ -59,6 +62,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
   const [activeMatch, setActiveMatch] = useState<SearchMatch | null>(null);
   const styles = useMemo(() => createStyles(theme.colors, prefs.zoom), [theme, prefs.zoom]);
 
+  const editors = useQuery({ queryKey: ["diff-editors"], queryFn: () => listEditors({}), staleTime: Infinity });
   const palettes = useQuery({ queryKey: ["diff-palettes"], queryFn: () => loadPalettes({}), staleTime: Infinity });
   const scheme = isDark(theme.colors.surface0) ? "dark" : "light";
   const rawSyntax = palettes.data?.palettes[prefs.syntaxTheme]?.[scheme];
@@ -197,6 +201,8 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
             canShowSince={blob !== null}
             showFull={showFull[file.path] === true}
             threadCount={fileThreads.filter((thread) => !thread.isResolved).length}
+            editors={editors.data?.editors ?? []}
+            onOpenInEditor={(editor) => void openInEditor({ directory, mode, path: file.path, editor })}
             onThreadsPress={() => {
               const first = fileThreads.find((thread) => !thread.isResolved) ?? fileThreads[0];
               if (first) showThread(workspaceId, first.id);
@@ -318,6 +324,8 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
               />
             ) : null
           }
+          editors={editors.data?.editors ?? []}
+          onOpenProject={(editor) => directory && void openProjectInEditor({ directory, editor })}
           viewedCount={viewedCount}
           fileCount={fileList.length}
           hidden={hidden}

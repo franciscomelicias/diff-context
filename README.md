@@ -12,6 +12,7 @@ A GitHub-style diff panel for any git workspace. Open it with the **Diff** butto
 - Generated files (jOOQ codegen, lockfiles, minified bundles, `linguist-generated`) start collapsed and are marked viewed automatically
 - **Filters** menu: hide whitespace changes, tests, generated files or translations (`translations/*.json`, `i18n/messages_*.properties`, `locales/`), colour theme
 - **Search** the whole diff (⌘F): match count, Enter / Shift+Enter to jump between matches
+- Open a file at its first change (file header) or the whole project (top bar) in IntelliJ IDEA, Zed or VS Code; icons only for the editors installed
 - File tree with a filter box, renames shown as `old → new`; clicking a file jumps to it
 - Comments: click or drag over line numbers (Shift+click extends), "Suggest change" inserts a ```suggestion block; send the comments to a Paseo agent in the same format as Paseo's built-in review (the send bar stays pinned at the top). Unsent comments survive restarts
 - **✦ Ask AI** on selected lines: sends them with your question to an "Ask about diff" chat in the workspace

@@ -1,7 +1,8 @@
 import type { RpcOutput } from "@getpaseo/plugin";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { DiffMode, filesRpc } from "../shared/diff";
+import type { DiffMode, EditorId, filesRpc } from "../shared/diff";
+import { EditorButtons } from "./file-card";
 import type { Prefs } from "./prefs";
 import type { Styles } from "./styles";
 import { listenOutsidePress } from "./web";
@@ -21,6 +22,8 @@ export function Toolbar({
   stack,
   onMode,
   search,
+  editors,
+  onOpenProject,
   viewedCount,
   fileCount,
   hidden,
@@ -40,6 +43,8 @@ export function Toolbar({
   stack: Stack;
   onMode: (mode: DiffMode) => void;
   search: ReactNode;
+  editors: { id: EditorId; label: string }[];
+  onOpenProject: (editor: EditorId) => void;
   viewedCount: number;
   fileCount: number;
   /** How many files each active filter hides. */
@@ -71,6 +76,7 @@ export function Toolbar({
         <IconButton label="☰" hint="Toggle file tree" active={prefs.showTree} onPress={() => setPrefs({ showTree: !prefs.showTree })} styles={styles} />
         <Segmented options={modeOptions(stack)} value={mode} onChange={onMode} styles={styles} />
         <View style={styles.toolbarGrow}>{search}</View>
+        <EditorButtons editors={editors} target="project" onOpen={onOpenProject} styles={styles} />
         {fileCount > 0 ? (
           <View style={styles.progress}>
             <Text style={styles.toolbarMuted}>

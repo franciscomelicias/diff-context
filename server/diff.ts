@@ -356,7 +356,7 @@ interface StackInfo {
 }
 
 /** Same views as Paseo's own diff (working tree vs HEAD, branch vs its base), plus one layer of a stack. */
-async function resolveRefs(
+export async function resolveRefs(
   directory: string,
   mode: DiffMode,
 ): Promise<{ refs: string[]; label: string; baseRef: string | null; stack: StackInfo | null }> {
@@ -460,7 +460,7 @@ function splitLines(content: string): string[] {
   return lines;
 }
 
-async function git(directory: string, args: string[]): Promise<string> {
+export async function git(directory: string, args: string[]): Promise<string> {
   return (await run(GIT, args, directory)).replace(/\n$/, "");
 }
 
