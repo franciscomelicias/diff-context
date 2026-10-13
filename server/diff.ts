@@ -57,42 +57,46 @@ export async function listFiles({
     git(directory, ["diff", "-z", "--raw", "--abbrev=40", "-M", ...refs]),
   ]);
   const rawByPath = parseRaw(raw);
-  const markedGenerated = await linguistGenerated(directory, parseNumstat(numstat).map((entry) => entry.path));
-  const files: ChangedFile[] = await Promise.all(
-    parseNumstat(numstat).map(async ({ added, deleted, path, oldPath }) => {
-      const binary = added === "-";
-      const entry = rawByPath.get(path);
-      return {
-        path,
-        oldPath,
-        status: entry?.status ?? "M",
-        additions: binary ? 0 : Number(added),
-        deletions: binary ? 0 : Number(deleted),
-        binary,
-        fingerprint: await fingerprint({ directory, path, entry }),
-        generated: markedGenerated.has(path) || GENERATED.some((pattern) => pattern.test(path)),
-        test: TESTS.some((pattern) => pattern.test(path)),
-        translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
-      };
-    }),
-  );
-  if (mode === "uncommitted") {
-    const untracked = await git(directory, ["ls-files", "--others", "--exclude-standard"]);
-    for (const path of untracked.split("\n").filter(Boolean)) {
-      const content = await readFile(join(directory, path), "utf8").catch(() => "");
-      files.push({
-        path,
-        oldPath: null,
-        status: "A",
-        additions: splitLines(content).length,
-        deletions: 0,
-        binary: false,
-        fingerprint: await fingerprint({ directory, path, entry: undefined }),
-        generated: GENERATED.some((pattern) => pattern.test(path)),
-        test: TESTS.some((pattern) => pattern.test(path)),
-        translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
-      });
-    }
+  const entries = parseNumstat(numstat);
+  const untracked =
+    mode === "uncommitted"
+      ? (await git(directory, ["ls-files", "--others", "--exclude-standard"])).split("\n").filter(Boolean)
+      : [];
+  const hashes = await hashWorkTree(directory, [
+    ...entries.filter((entry) => !hasBlob(rawByPath.get(entry.path))).map((entry) => entry.path),
+    ...untracked,
+  ]);
+  const markedGenerated = await linguistGenerated(directory, entries.map((entry) => entry.path));
+  const files: ChangedFile[] = entries.map(({ added, deleted, path, oldPath }) => {
+    const binary = added === "-";
+    const entry = rawByPath.get(path);
+    return {
+      path,
+      oldPath,
+      status: entry?.status ?? "M",
+      additions: binary ? 0 : Number(added),
+      deletions: binary ? 0 : Number(deleted),
+      binary,
+      fingerprint: fingerprint({ path, entry, hashes }),
+      generated: markedGenerated.has(path) || GENERATED.some((pattern) => pattern.test(path)),
+      test: TESTS.some((pattern) => pattern.test(path)),
+      translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
+    };
+  });
+  for (const path of untracked) {
+    const content = await readFile(join(directory, path), "utf8").catch(() => "");
+    files.push({
+      path,
+      oldPath: null,
+      status: "A",
+      additions: splitLines(content).length,
+      deletions: 0,
+      binary: false,
+      fingerprint: fingerprint({ path, entry: undefined, hashes }),
+      generated: GENERATED.some((pattern) => pattern.test(path)),
+      test: TESTS.some((pattern) => pattern.test(path)),
+      translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
+    });
   }
   files.sort((a, b) => a.path.localeCompare(b.path));
   return {
@@ -290,17 +294,29 @@ function parseNumstat(numstat: string): { added: string; deleted: string; path: 
   return entries;
 }
 
-async function fingerprint(input: {
-  directory: string;
+function hasBlob(entry: { newBlob: string } | undefined): boolean {
+  return entry !== undefined && !/^0+$/.test(entry.newBlob);
+}
+
+/**
+ * Working-tree files have no blob id yet, so hash their content: unlike size + mtime, it survives a tool
+ * rewriting a file with the same content (formatters do), which would otherwise drop its Viewed mark.
+ */
+async function hashWorkTree(directory: string, paths: string[]): Promise<Map<string, string>> {
+  const existing = paths.filter((path) => existsSync(join(directory, path)));
+  if (existing.length === 0) return new Map();
+  const ids = (await git(directory, ["hash-object", "--", ...existing])).split("\n");
+  return new Map(existing.map((path, index) => [path, ids[index]]));
+}
+
+function fingerprint(input: {
   path: string;
   entry: { oldBlob: string; newBlob: string } | undefined;
-}): Promise<string> {
-  const { directory, path, entry } = input;
-  const unhashed = !entry || /^0+$/.test(entry.newBlob);
-  if (!unhashed) return entry.newBlob;
-  // Working-tree files have no blob id yet; size + mtime changes whenever the file is edited.
-  const info = await stat(join(directory, path)).catch(() => null);
-  return info ? `wt:${info.size}:${info.mtimeMs}` : `deleted:${entry?.oldBlob ?? ""}`;
+  hashes: Map<string, string>;
+}): string {
+  const { path, entry, hashes } = input;
+  if (entry && hasBlob(entry)) return entry.newBlob;
+  return hashes.get(path) ?? `deleted:${entry?.oldBlob ?? ""}`;
 }
 
 async function readNewContent(input: { directory: string; mode: DiffMode; path: string }): Promise<string[] | null> {
