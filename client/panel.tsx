@@ -2,13 +2,14 @@ import type { RpcOutput } from "@getpaseo/plugin";
 import type { PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
 import { useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
 import { FlatList, Pressable, Text, TextInput, View, type ViewToken } from "react-native";
 import { filesRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
 import { AskContext, useAskAgent } from "./ask";
 import { readableSyntax } from "./colors";
 import { commentKey } from "./comments";
 import { FileBody, FileHeaderRow } from "./file-card";
+import { useFileScroller } from "./file-scroller";
 import { FileTree } from "./file-tree";
 import { usePrefs } from "./prefs";
 import { SearchContext } from "./search";
@@ -97,9 +98,19 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
 
   const { viewed, update: updateViewed, ready: viewedReady } = useViewed(`${workspaceId}:${mode}`);
   const allFiles = data?.files ?? [];
-  const hiddenTests = prefs.hideTests ? allFiles.filter((file) => file.test).length : 0;
-  const fileList = prefs.hideTests ? allFiles.filter((file) => !file.test) : allFiles;
+  const hidden = {
+    tests: prefs.hideTests ? allFiles.filter((file) => file.test).length : 0,
+    generated: prefs.hideGenerated ? allFiles.filter((file) => file.generated).length : 0,
+    translations: prefs.hideTranslations ? allFiles.filter((file) => file.translation).length : 0,
+  };
+  const fileList = allFiles.filter((file) => {
+    const hiddenTest = prefs.hideTests && file.test;
+    const hiddenGenerated = prefs.hideGenerated && file.generated;
+    const hiddenTranslation = prefs.hideTranslations && file.translation;
+    return !hiddenTest && !hiddenGenerated && !hiddenTranslation;
+  });
   const ask = useAskAgent(workspaceId, data?.compareLabel ?? "", navigation);
+  const { register, scrollToFile } = useFileScroller(listRef as RefObject<FlatList<unknown> | null>, fileList.map((file) => file.path));
   // Known from any mode's listing, so the toggle stays put while switching between them.
   const stackInfo = data?.stack ?? latest.data?.stack ?? null;
   // A "!" prefix records an explicit untick, so an unticked generated file is not auto-marked again.
@@ -136,6 +147,8 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
     const nowViewed = !isViewed(file);
     updateViewed({ [file.path]: nowViewed ? file.fingerprint : file.generated ? `!${file.fingerprint}` : null });
     setOpenOverrides({ ...openOverrides, [file.path]: !nowViewed });
+    // Collapsing the file being read would leave the scroll offset deep inside the files below it.
+    if (nowViewed && file.path === currentPath) scrollToFile(file.path);
   };
   const toggleAllViewed = () => {
     updateViewed(
@@ -184,9 +197,14 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
             canShowSince={blob !== null}
             showFull={showFull[file.path] === true}
             threadCount={fileThreads.filter((thread) => !thread.isResolved).length}
+            onThreadsPress={() => {
+              const first = fileThreads.find((thread) => !thread.isResolved) ?? fileThreads[0];
+              if (first) showThread(workspaceId, first.id);
+            }}
             onToggleOpen={() => setOpenOverrides({ ...openOverrides, [file.path]: !open })}
             onToggleViewed={() => toggleViewed(file)}
             onToggleFull={() => setShowFull({ ...showFull, [file.path]: !showFull[file.path] })}
+            headerRef={register(file.path, "header")}
             styles={styles}
           />
         ),
@@ -205,11 +223,11 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
             since={changed && blob && !showFull[file.path] ? blob : null}
             ignoreWhitespace={prefs.hideWhitespace}
             threads={fileThreads}
-            onThreadPress={(thread) => showThread(workspaceId, thread.id)}
             loadLarge={loadLarge[file.path] === true}
             onLoadLarge={() => setLoadLarge({ ...loadLarge, [file.path]: true })}
             commentsKey={commentKey(workspaceId, mode)}
             syntax={syntax}
+            bodyRef={register(file.path, "body")}
             styles={styles}
           />
         ),
@@ -219,8 +237,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
 
   const jumpTo = (file: ChangedFile) => {
     setCurrentPath(file.path);
-    const index = items.findIndex((item) => item.key === `h:${file.path}`);
-    if (index !== -1) listRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0 });
+    scrollToFile(file.path);
   };
   // Open the file (full diff, large ones loaded) and render it; its row then scrolls itself to the middle.
   const goToMatch = (match: SearchMatch | null) => {
@@ -230,8 +247,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
     setLoadLarge((large) => ({ ...large, [match.path]: true }));
     setShowFull((full) => ({ ...full, [match.path]: true }));
     setCurrentPath(match.path);
-    const index = items.findIndex((item) => item.key === `b:${match.path}`);
-    if (index !== -1) listRef.current?.scrollToIndex({ index, animated: false, viewPosition: 0 });
+    scrollToFile(match.path, false);
   };
   // FlatList wants one stable callback; the latest file list is read through a ref.
   const latestItems = useRef(items);
@@ -304,7 +320,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
           }
           viewedCount={viewedCount}
           fileCount={fileList.length}
-          hiddenTests={hiddenTests}
+          hidden={hidden}
           themes={palettes.data?.themes ?? null}
           allViewed={allViewed}
           anyClosed={fileList.some((file) => !isOpen(file))}

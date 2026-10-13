@@ -18,6 +18,7 @@ const fileSchema = z.object({
   /** Lockfiles, codegen output, minified bundles, or linguist-generated in .gitattributes. */
   generated: z.boolean(),
   test: z.boolean(),
+  translation: z.boolean(),
 });
 
 export type ChangedFile = z.infer<typeof fileSchema>;
@@ -139,6 +140,13 @@ export const searchRpc = defineRpc({
   name: "diff.search",
   input: z.object({ directory: z.string(), mode: modeSchema, ignoreWhitespace: z.boolean(), query: z.string() }),
   output: z.object({ matches: z.array(searchMatchSchema), truncated: z.boolean() }),
+});
+
+/** Posts a reply to a GitHub review thread (one GraphQL mutation, only on click). */
+export const threadReplyRpc = defineRpc({
+  name: "diff.thread.reply",
+  input: z.object({ directory: z.string(), threadId: z.string(), body: z.string() }),
+  output: z.object({}),
 });
 
 /** Small JSON documents the daemon keeps across restarts: panel settings, unsent comment drafts. */

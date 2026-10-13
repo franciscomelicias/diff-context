@@ -28,6 +28,12 @@ const TESTS = [
   /(Test|Tests|IT)\.(java|kt)$/,
 ];
 const MAX_SEARCH_MATCHES = 1000;
+const TRANSLATIONS = [
+  /(^|\/)translations\/[^/]+\.json$/,
+  /(^|\/)i18n\/messages[^/]*\.properties$/,
+  /(^|\/)locales?\/.+\.(json|ya?ml)$/,
+  /\.po$/,
+];
 const BLOB_ID = /^[0-9a-f]{40}$/;
 // The panel polls for changes; a PR's base branch rarely moves, so don't ask GitHub on every poll.
 const PR_BASE_TTL_MS = 5 * 60 * 1000;
@@ -66,6 +72,7 @@ export async function listFiles({
         fingerprint: await fingerprint({ directory, path, entry }),
         generated: markedGenerated.has(path) || GENERATED.some((pattern) => pattern.test(path)),
         test: TESTS.some((pattern) => pattern.test(path)),
+        translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
       };
     }),
   );
@@ -83,6 +90,7 @@ export async function listFiles({
         fingerprint: await fingerprint({ directory, path, entry: undefined }),
         generated: GENERATED.some((pattern) => pattern.test(path)),
         test: TESTS.some((pattern) => pattern.test(path)),
+        translation: TRANSLATIONS.some((pattern) => pattern.test(path)),
       });
     }
   }

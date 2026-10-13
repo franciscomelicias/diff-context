@@ -32,6 +32,15 @@ export async function listThreads({ directory }: { directory: string }): Promise
   return value;
 }
 
+export async function replyToThread({ directory, threadId, body }: { directory: string; threadId: string; body: string }) {
+  const query = `mutation($thread: ID!, $body: String!) {
+    addPullRequestReviewThreadReply(input: { pullRequestReviewThreadId: $thread, body: $body }) { comment { id } }
+  }`;
+  await run(GH, ["api", "graphql", "-f", `query=${query}`, "-f", `thread=${threadId}`, "-f", `body=${body}`], directory);
+  for (const key of cache.keys()) if (key.startsWith(`${directory}:`)) cache.delete(key);
+  return {};
+}
+
 async function fetchThreads(directory: string, branch: string): Promise<ThreadsResult> {
   const { owner, name } = await repoOf(directory);
   const query = `query($owner: String!, $name: String!, $branch: String!) {

@@ -22,6 +22,7 @@ export function FileHeaderRow({
   canShowSince,
   showFull,
   threadCount,
+  onThreadsPress,
   onToggleOpen,
   onToggleViewed,
   onToggleFull,
@@ -38,6 +39,8 @@ export function FileHeaderRow({
   showFull: boolean;
   /** Unresolved GitHub review threads on this file. */
   threadCount: number;
+  /** Opens the PR comments side panel with every thread of the PR. */
+  onThreadsPress: () => void;
   onToggleOpen: () => void;
   onToggleViewed: () => void;
   onToggleFull: () => void;
@@ -77,7 +80,11 @@ export function FileHeaderRow({
         <Text style={styles.muted}>{copied ? "✓ Copied" : "⧉"}</Text>
       </Pressable>
       {file.generated ? <Text style={styles.generatedBadge}>Generated</Text> : null}
-      {threadCount > 0 ? <Text style={styles.threadBadge}>💬 {threadCount}</Text> : null}
+      {threadCount > 0 ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Show all PR comments" onPress={onThreadsPress}>
+          <Text style={styles.threadBadge}>💬 {threadCount}</Text>
+        </Pressable>
+      ) : null}
       {changedSinceViewed ? <Text style={styles.changedBadge}>Changed since last view</Text> : null}
       {changedSinceViewed && canShowSince && open ? (
         <Pressable accessibilityRole="button" onPress={onToggleFull}>
@@ -102,11 +109,11 @@ export function FileBody({
   since,
   ignoreWhitespace,
   threads,
-  onThreadPress,
   loadLarge,
   onLoadLarge,
   commentsKey,
   syntax,
+  bodyRef,
   styles,
 }: {
   directory: string;
@@ -118,17 +125,17 @@ export function FileBody({
   since: string | null;
   ignoreWhitespace: boolean;
   threads: ReviewThread[];
-  onThreadPress: (thread: ReviewThread) => void;
   loadLarge: boolean;
   onLoadLarge: () => void;
   commentsKey: string;
   syntax: SyntaxSet;
+  bodyRef?: Ref<View>;
   styles: Styles;
 }) {
-  if (!open) return <View style={styles.fileGap} />;
+  if (!open) return <View ref={bodyRef} style={styles.fileGap} />;
   const size = file.additions + file.deletions;
   return (
-    <View style={[styles.fileBody, current ? styles.fileCurrent : null]}>
+    <View ref={bodyRef} style={[styles.fileBody, current ? styles.fileCurrent : null]}>
       {size > LARGE_DIFF_LINES && !loadLarge ? (
         <Pressable accessibilityRole="button" style={styles.largeDiff} onPress={onLoadLarge}>
           <Text style={styles.link}>Large diff ({size} changed lines) · Load diff</Text>
@@ -142,7 +149,6 @@ export function FileBody({
           since={since}
           ignoreWhitespace={ignoreWhitespace}
           threads={threads}
-          onThreadPress={onThreadPress}
           commentsKey={commentsKey}
           syntax={syntax}
           styles={styles}

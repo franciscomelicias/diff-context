@@ -19,6 +19,8 @@ declare const document:
       addEventListener(type: "keydown", listener: (event: KeyEvent) => void, options?: { capture?: boolean }): void;
       removeEventListener(type: "keydown", listener: (event: KeyEvent) => void, options?: { capture?: boolean }): void;
       addEventListener(type: "mouseup", listener: () => void, options?: { once?: boolean }): void;
+      addEventListener(type: "mousedown", listener: (event: { target: unknown }) => void, options?: { capture?: boolean }): void;
+      removeEventListener(type: "mousedown", listener: (event: { target: unknown }) => void, options?: { capture?: boolean }): void;
     }
   | undefined;
 
@@ -73,4 +75,28 @@ export function onMouseUpOnce(handler: () => void) {
 export function scrollIntoView(node: unknown) {
   const element = node as { scrollIntoView?: (options: { block: string }) => void } | null;
   element?.scrollIntoView?.({ block: "center" });
+}
+
+/** On web a View ref is its DOM node; its box relative to the window. */
+export function boxOf(node: unknown): { top: number; height: number } | null {
+  const element = node as { getBoundingClientRect?: () => { top: number; height: number } } | null;
+  return element?.getBoundingClientRect ? element.getBoundingClientRect() : null;
+}
+
+/** Calls `handler` on a mouse press outside `node`, or on Escape. */
+export function listenOutsidePress(node: unknown, handler: () => void): () => void {
+  if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
+  const element = node as { contains?: (target: unknown) => boolean } | null;
+  const onPress = (event: { target: unknown }) => {
+    if (!element?.contains?.(event.target)) handler();
+  };
+  const onKey = (event: KeyEvent) => {
+    if (event.key === "Escape") handler();
+  };
+  document.addEventListener("mousedown", onPress, { capture: true });
+  document.addEventListener("keydown", onKey, { capture: true });
+  return () => {
+    document.removeEventListener("mousedown", onPress, { capture: true });
+    document.removeEventListener("keydown", onKey, { capture: true });
+  };
 }

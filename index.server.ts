@@ -1,7 +1,7 @@
 import type { PluginServerContext } from "@getpaseo/plugin/server";
 import { fileDiff, listFiles, palettes, searchDiff } from "./server/diff";
 import { storeGet, storeSet } from "./server/store";
-import { listThreads } from "./server/threads";
+import { listThreads, replyToThread } from "./server/threads";
 import { getViewed, setViewed } from "./server/viewed";
 import {
   fileDiffRpc,
@@ -10,6 +10,7 @@ import {
   searchRpc,
   storeGetRpc,
   storeSetRpc,
+  threadReplyRpc,
   threadsRpc,
   viewedGetRpc,
   viewedSetRpc,
@@ -23,6 +24,7 @@ export default function contribute(server: PluginServerContext) {
   server.handle(viewedGetRpc, getViewed);
   server.handle(viewedSetRpc, setViewed);
   server.handle(threadsRpc, listThreads);
+  server.handle(threadReplyRpc, replyToThread);
   server.handle(storeGetRpc, storeGet);
   server.handle(storeSetRpc, storeSet);
   return () => {};

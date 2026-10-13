@@ -88,7 +88,7 @@ export function FileTree({
           </Pressable>
         ))}
       </View>
-      <ScrollView>
+      <ScrollView style={styles.treeScroll}>
         {root.children.map((child) => renderNode(child, 0))}
         {visible.length === 0 ? <Text style={[styles.muted, { padding: 8 }]}>No matching files.</Text> : null}
       </ScrollView>

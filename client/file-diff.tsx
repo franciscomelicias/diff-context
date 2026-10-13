@@ -7,6 +7,7 @@ import { AskContext } from "./ask";
 import { commentTarget, toContextLine, useComments } from "./comments";
 import { buildSegments, gapLines, type Gap } from "./gaps";
 import { CommentBubble, CommentEditor, SplitRow, UnifiedRow } from "./line";
+import { ThreadCard, threadAskContext } from "./thread-card";
 import { linesOf, toSplitRows, toUnifiedRows, type DisplayRow } from "./rows";
 import { SearchContext } from "./search";
 import type { SyntaxSet } from "./colors";
@@ -23,9 +24,9 @@ export type ViewMode = "unified" | "split";
 type Revealed = Record<string, { top: number; bottom: number }>;
 
 interface ListContext {
+  directory: string;
   filePath: string;
   threads: ReviewThread[];
-  onThreadPress: (thread: ReviewThread) => void;
   commentsKey: string;
   viewMode: ViewMode;
   syntax: SyntaxSet;
@@ -41,7 +42,6 @@ export function FileDiff({
   since,
   ignoreWhitespace,
   threads,
-  onThreadPress,
   commentsKey,
   syntax,
   styles,
@@ -52,7 +52,6 @@ export function FileDiff({
   viewMode: ViewMode;
   ignoreWhitespace: boolean;
   threads: ReviewThread[];
-  onThreadPress: (thread: ReviewThread) => void;
   /** Blob id seen when marked viewed: show only the changes since then. */
   since: string | null;
   commentsKey: string;
@@ -79,9 +78,9 @@ export function FileDiff({
   const gaps = segments.flatMap((segment) => (segment.kind === "gap" ? [segment.gap] : []));
   const allShown = gaps.every((gap) => hiddenCount(gap, revealed) === 0);
   const context: ListContext = {
+    directory,
     filePath: file.path,
     threads,
-    onThreadPress,
     commentsKey,
     viewMode,
     syntax,
@@ -161,9 +160,9 @@ export function FileDiff({
 function RowList({
   lines,
   header,
+  directory,
   filePath,
   threads,
-  onThreadPress,
   commentsKey,
   viewMode,
   syntax,
@@ -178,6 +177,20 @@ function RowList({
   const [selection, setSelection] = useState<{ anchor: number; end: number; anchorLine: DiffLine; endLine: DiffLine } | null>(null);
   const [dragging, setDragging] = useState(false);
   const [draft, setDraft] = useState("");
+  const [openThreads, setOpenThreads] = useState<ReadonlySet<string>>(new Set());
+  const threadsOf = (line: DiffLine) =>
+    threads.filter((thread) =>
+      thread.side === "LEFT" ? line.kind !== "add" && thread.line === line.oldNo : line.kind !== "del" && thread.line === line.newNo,
+    );
+  const toggleThreads = (lineThreads: ReviewThread[]) => {
+    const allOpen = lineThreads.every((thread) => openThreads.has(thread.id));
+    const next = new Set(openThreads);
+    for (const thread of lineThreads) {
+      if (allOpen) next.delete(thread.id);
+      else next.add(thread.id);
+    }
+    setOpenThreads(next);
+  };
   const first = selection ? Math.min(selection.anchor, selection.end) : -1;
   const last = selection ? Math.max(selection.anchor, selection.end) : -1;
   const selectedLines = rows.slice(first, last + 1).flatMap(linesOf);
@@ -199,24 +212,27 @@ function RowList({
     const line = linesOf(row).find((candidate) => commentTarget(candidate).side === side) ?? linesOf(row)[0];
     if (line) setSelection({ ...selection, end: index, endLine: line });
   };
-  const save = (body: string) => {
-    if (!targetLine) return;
-    const target = commentTarget(targetLine);
-    const start = commentTarget(linesOf(rows[first]).find((line) => commentTarget(line).side === target.side) ?? targetLine);
+  const addComment = ({ from, to, line, body }: { from: number; to: number; line: DiffLine; body: string }) => {
+    const target = commentTarget(line);
+    const start = commentTarget(linesOf(rows[from]).find((candidate) => commentTarget(candidate).side === target.side) ?? line);
     store.add({
       filePath,
       ...target,
-      startLineNumber: first === last ? null : start.lineNumber,
+      startLineNumber: from === to ? null : start.lineNumber,
       body,
       context: {
         hunkHeader: header,
-        targetLine: toContextLine(targetLine),
+        targetLine: toContextLine(line),
         lines: rows
-          .slice(Math.max(0, first - CONTEXT_RADIUS), last + CONTEXT_RADIUS + 1)
+          .slice(Math.max(0, from - CONTEXT_RADIUS), to + CONTEXT_RADIUS + 1)
           .flatMap(linesOf)
           .map(toContextLine),
       },
     });
+  };
+  const save = (body: string) => {
+    if (!targetLine) return;
+    addComment({ from: first, to: last, line: targetLine, body });
     close();
   };
 
@@ -238,18 +254,32 @@ function RowList({
               row={row}
               tokensOf={tokensOf}
               changesOf={(line) => changes.get(line)}
-              threadsOf={(line) =>
-                threads.filter((thread) =>
-                  thread.side === "LEFT" ? line.kind !== "add" && thread.line === line.oldNo : line.kind !== "del" && thread.line === line.newNo,
-                )
-              }
-              onThreadPress={onThreadPress}
+              threadsOf={threadsOf}
+              onThreadPress={toggleThreads}
               syntax={syntax}
               selected={index >= first && index <= last}
               onGutterPress={(line, shift) => startSelection(index, line, shift)}
               onEnter={() => extendSelection(index, row)}
               styles={styles}
             />
+            {[...new Set(linesOf(row).flatMap(threadsOf))]
+              .filter((thread) => openThreads.has(thread.id))
+              .map((thread) => (
+                <View key={thread.id} style={styles.inlineThread}>
+                  <ThreadCard
+                    thread={thread}
+                    directory={directory}
+                    showPath={false}
+                    onAsk={ask ? (question) => void ask(threadAskContext(thread, question)) : null}
+                    onAddComment={(body) => {
+                      const line = linesOf(row).find((candidate) => threadsOf(candidate).includes(thread));
+                      if (line) addComment({ from: index, to: index, line, body: followUpBody(thread, body) });
+                    }}
+                    onClose={() => toggleThreads([thread])}
+                    styles={styles}
+                  />
+                </View>
+              ))}
             {rowComments.map((comment) => (
               <CommentBubble key={comment.id} comment={comment} onUpdate={store.update} onRemove={store.remove} styles={styles} />
             ))}
@@ -280,6 +310,12 @@ function RowList({
       })}
     </>
   );
+}
+
+/** Quotes the GitHub thread so the agent knows what the comment follows up on. */
+function followUpBody(thread: ReviewThread, body: string): string {
+  const quoted = thread.comments.map((comment) => `> @${comment.author}: ${comment.body.replace(/\n/g, "\n> ")}`).join("\n>\n");
+  return `Follow-up on this GitHub review thread:\n${quoted}\n\n${body}`;
 }
 
 function hiddenCount(gap: Gap, revealed: Revealed): number {

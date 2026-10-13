@@ -1,11 +1,12 @@
 import type { PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
-import { openExternalUrl, useRpc, useWorkspace } from "@getpaseo/plugin/client";
+import { useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
-import { threadsRpc, type ReviewThread } from "../shared/diff";
+import { threadsRpc } from "../shared/diff";
 import { useAskAgent } from "./ask";
-import { createStyles, type Styles } from "./styles";
+import { createStyles } from "./styles";
+import { ThreadCard, threadAskContext } from "./thread-card";
 import { useSelectedThread } from "./threads-store";
 
 /** The PR's GitHub review threads, opened from a 💬 icon in the diff; Ask AI talks a thread through. */
@@ -50,61 +51,13 @@ export function CommentsPanel({ workspaceId, theme, navigation }: PluginWorkspac
         <ThreadCard
           key={thread.id}
           thread={thread}
+          directory={directory ?? ""}
+          showPath
           highlighted={thread.id === selected}
-          onAsk={() =>
-            void ask({
-              filePath: thread.path,
-              lines: thread.line ? `line ${thread.line}` : "(outdated position)",
-              code: thread.comments.map((comment) => `@${comment.author}: ${comment.body}`).join("\n\n"),
-              question: "Help me understand this review comment: what is the reviewer asking, is it right, and how should I address or answer it?",
-            })
-          }
+          onAsk={(question) => void ask(threadAskContext(thread, question))}
           styles={styles}
         />
       ))}
     </ScrollView>
-  );
-}
-
-function ThreadCard({
-  thread,
-  highlighted,
-  onAsk,
-  styles,
-}: {
-  thread: ReviewThread;
-  highlighted: boolean;
-  onAsk: () => void;
-  styles: Styles;
-}) {
-  return (
-    <View style={[styles.threadCard, highlighted ? styles.threadCardSelected : null]}>
-      <View style={styles.toolbar}>
-        <Text style={styles.threadPath} numberOfLines={2}>
-          {thread.path}
-          {thread.line ? `:${thread.line}` : ""}
-        </Text>
-        {thread.isResolved ? <Text style={styles.generatedBadge}>resolved</Text> : null}
-        {thread.isOutdated ? <Text style={styles.generatedBadge}>outdated</Text> : null}
-      </View>
-      {thread.comments.map((comment) => (
-        <View key={comment.url} style={styles.threadComment}>
-          <Text style={styles.threadAuthor}>
-            @{comment.author} <Text style={styles.muted}>{new Date(comment.createdAt).toLocaleDateString()}</Text>
-          </Text>
-          <Text selectable style={styles.commentBody}>
-            {comment.body}
-          </Text>
-        </View>
-      ))}
-      <View style={styles.commentActions}>
-        <Pressable accessibilityRole="button" onPress={onAsk}>
-          <Text style={styles.primaryButton}>✦ Ask AI</Text>
-        </Pressable>
-        <Pressable accessibilityRole="link" onPress={() => void openExternalUrl(thread.comments[0]?.url ?? "")}>
-          <Text style={styles.link}>Open on GitHub ↗</Text>
-        </Pressable>
-      </View>
-    </View>
   );
 }

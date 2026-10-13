@@ -1,9 +1,10 @@
 import type { RpcOutput } from "@getpaseo/plugin";
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import type { DiffMode, filesRpc } from "../shared/diff";
 import type { Prefs } from "./prefs";
 import type { Styles } from "./styles";
+import { listenOutsidePress } from "./web";
 
 const ZOOM_STEPS = [0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.35, 1.5, 1.75, 2];
 
@@ -22,7 +23,7 @@ export function Toolbar({
   search,
   viewedCount,
   fileCount,
-  hiddenTests,
+  hidden,
   themes,
   allViewed,
   anyClosed,
@@ -41,7 +42,8 @@ export function Toolbar({
   search: ReactNode;
   viewedCount: number;
   fileCount: number;
-  hiddenTests: number;
+  /** How many files each active filter hides. */
+  hidden: { tests: number; generated: number; translations: number };
   themes: { id: string; label: string }[] | null;
   allViewed: boolean;
   anyClosed: boolean;
@@ -53,7 +55,10 @@ export function Toolbar({
   styles: Styles;
 }) {
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const activeFilters = Number(prefs.hideWhitespace) + Number(prefs.hideTests);
+  const filtersRef = useRef<View>(null);
+  useEffect(() => (filtersOpen ? listenOutsidePress(filtersRef.current, () => setFiltersOpen(false)) : undefined), [filtersOpen]);
+  const activeFilters =
+    Number(prefs.hideWhitespace) + Number(prefs.hideTests) + Number(prefs.hideGenerated) + Number(prefs.hideTranslations);
   const zoomBy = (direction: 1 | -1) => {
     const index = ZOOM_STEPS.indexOf(prefs.zoom);
     setPrefs({ zoom: ZOOM_STEPS[Math.min(ZOOM_STEPS.length - 1, Math.max(0, (index === -1 ? 3 : index) + direction))] });
@@ -104,7 +109,7 @@ export function Toolbar({
             <Text style={styles.segment}>+</Text>
           </Pressable>
         </View>
-        <View style={styles.menuAnchor}>
+        <View ref={filtersRef} style={styles.menuAnchor}>
           <Pressable accessibilityRole="button" onPress={() => setFiltersOpen(!filtersOpen)}>
             <Text style={activeFilters > 0 ? styles.tabActive : styles.tab}>
               Filters{activeFilters > 0 ? ` · ${activeFilters}` : ""} ▾
@@ -119,9 +124,21 @@ export function Toolbar({
                 styles={styles}
               />
               <MenuCheck
-                label={prefs.hideTests ? `Hide tests (${hiddenTests} hidden)` : "Hide tests"}
+                label={prefs.hideTests ? `Hide tests (${hidden.tests} hidden)` : "Hide tests"}
                 checked={prefs.hideTests}
                 onPress={() => setPrefs({ hideTests: !prefs.hideTests })}
+                styles={styles}
+              />
+              <MenuCheck
+                label={prefs.hideGenerated ? `Hide generated files (${hidden.generated} hidden)` : "Hide generated files"}
+                checked={prefs.hideGenerated}
+                onPress={() => setPrefs({ hideGenerated: !prefs.hideGenerated })}
+                styles={styles}
+              />
+              <MenuCheck
+                label={prefs.hideTranslations ? `Hide translations (${hidden.translations} hidden)` : "Hide translations"}
+                checked={prefs.hideTranslations}
+                onPress={() => setPrefs({ hideTranslations: !prefs.hideTranslations })}
                 styles={styles}
               />
               {themes ? (

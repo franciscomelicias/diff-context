@@ -16,7 +16,8 @@ interface RowProps {
   row: DisplayRow;
   /** GitHub review threads anchored on a line (old side for deletions, new side otherwise). */
   threadsOf: (line: DiffLine) => ReviewThread[];
-  onThreadPress: (thread: ReviewThread) => void;
+  /** Shows or hides the line's threads under it. */
+  onThreadPress: (threads: ReviewThread[]) => void;
   tokensOf: (line: DiffLine) => Token[] | undefined;
   changesOf: (line: DiffLine) => Ranges | undefined;
   syntax: SyntaxSet;
@@ -111,21 +112,20 @@ function useActiveMatchScroll(lines: (DiffLine | null)[]) {
   return ref;
 }
 
-/** 💬 with the thread count; opens the PR comments side panel on the first (unresolved first) thread. */
+/** 💬 with the thread count; toggles the line's threads under it. */
 function ThreadIcon({
   threads,
   onPress,
   styles,
 }: {
   threads: ReviewThread[];
-  onPress: (thread: ReviewThread) => void;
+  onPress: (threads: ReviewThread[]) => void;
   styles: Styles;
 }) {
   if (threads.length === 0) return <View style={styles.threadIconSpace} />;
-  const first = [...threads].sort((a, b) => Number(a.isResolved) - Number(b.isResolved))[0];
   const open = threads.some((thread) => !thread.isResolved);
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Show PR comments" onPress={() => onPress(first)} style={styles.threadIconSpace}>
+    <Pressable accessibilityRole="button" accessibilityLabel="Show PR comments" onPress={() => onPress(threads)} style={styles.threadIconSpace}>
       <Text style={open ? styles.threadIcon : styles.threadIconResolved}>💬{threads.length > 1 ? threads.length : ""}</Text>
     </Pressable>
   );

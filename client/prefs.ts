@@ -10,6 +10,8 @@ export interface Prefs {
   zoom: number;
   showTree: boolean;
   hideTests: boolean;
+  hideGenerated: boolean;
+  hideTranslations: boolean;
   hideWhitespace: boolean;
 }
 
@@ -20,6 +22,8 @@ export const DEFAULT_PREFS: Prefs = {
   zoom: 1,
   showTree: true,
   hideTests: false,
+  hideGenerated: false,
+  hideTranslations: false,
   hideWhitespace: false,
 };
 

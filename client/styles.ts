@@ -14,7 +14,7 @@ export function createStyles(colors: Colors, zoom = 1) {
   const segment = { fontSize: 12, paddingHorizontal: 10, paddingVertical: 4, overflow: "hidden" as const };
   const block = { width: 8, height: 8, borderRadius: 1, backgroundColor: colors.surface2 };
   return {
-    screen: { flex: 1, backgroundColor: colors.surface0 },
+    screen: { flex: 1, minHeight: 0, backgroundColor: colors.surface0 },
     // Above the banner and the list, so the Filters menu can hang over them.
     toolbarBar: {
       gap: 6,
@@ -53,8 +53,9 @@ export function createStyles(colors: Colors, zoom = 1) {
     menuItem: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
     menuText: { color: colors.foreground, fontSize: 12 },
     toolbar: { flexDirection: "row" as const, gap: 8, alignItems: "center" as const, flexWrap: "wrap" as const },
-    body: { flex: 1, flexDirection: "row" as const },
-    main: { flex: 1 },
+    // minHeight 0 lets the panes shrink to the panel instead of growing with their content, so each scrolls.
+    body: { flex: 1, minHeight: 0, flexDirection: "row" as const, overflow: "hidden" as const },
+    main: { flex: 1, minHeight: 0 },
     // No gap: a file is two children (sticky header + body) that must touch; headers carry their own top margin.
     content: { padding: 12, paddingBottom: 48 },
     tab: { ...tab, color: colors.foregroundMuted, backgroundColor: colors.surface1 },
@@ -75,11 +76,13 @@ export function createStyles(colors: Colors, zoom = 1) {
     linkDanger: { color: colors.statusDanger, fontSize: 12 },
     muted: { color: colors.foregroundMuted, fontSize: 12 },
     error: { color: colors.statusDanger },
+    success: { color: colors.statusSuccess, fontSize: 12 },
     note: { color: colors.foregroundMuted, fontSize: 12, padding: 10 },
     additions: { color: colors.statusSuccess, fontSize: 12, fontWeight: "600" as const },
     deletions: { color: colors.statusDanger, fontSize: 12, fontWeight: "600" as const },
 
-    treePane: { width: 260, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface0 },
+    treePane: { width: 260, minHeight: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface0 },
+    treeScroll: { flex: 1, minHeight: 0 },
     treeFilter: { flexDirection: "row" as const, gap: 6, padding: 8 },
     treeItem: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingVertical: 3, paddingRight: 8 },
     treeDir: { color: colors.foreground, fontSize: 12, fontWeight: "500" as const },
@@ -180,6 +183,7 @@ export function createStyles(colors: Colors, zoom = 1) {
       overflow: "hidden" as const,
     },
     threadCard: { gap: 8, padding: 10, borderRadius: 6, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surface1 },
+    inlineThread: { marginVertical: 6, marginLeft: z(60), marginRight: 12, maxWidth: 820 },
     threadCardSelected: { borderColor: colors.accent, borderWidth: 2 },
     threadPath: { color: colors.foreground, fontFamily: MONO, fontSize: 12, fontWeight: "600" as const, flexShrink: 1 },
     threadComment: { gap: 2, paddingTop: 6, borderTopWidth: 1, borderTopColor: colors.border },
