@@ -6,7 +6,7 @@ A GitHub-style diff panel for any git workspace. Open it with the **Diff** butto
 - Stacked PRs: **Layer n/m** (default, only the current layer's changes) or **Stack** (everything since the trunk); uses gh-stack's local data when present
 - Unified or split view, zoom, syntax colours from Paseo's own highlighter, word-level change highlights
 - Settings (mode, view, zoom, colours, filters, file tree) are remembered across restarts
-- Big diffs stay fast: only files near the screen are rendered; file headers (with the Viewed checkbox) stick to the top while scrolling
+- Big diffs stay fast: a file loads its diff only once it comes near the screen; file headers (with the Viewed checkbox) stick to the top while scrolling
 - Hidden lines between hunks: expand 20 up/down, show all, or expand the whole file
 - **Viewed** checkbox per file (remembered), **Mark all viewed**, and a progress bar; a file that changes afterwards reopens showing only the changes since you viewed it
 - Generated files (jOOQ codegen, lockfiles, minified bundles, `linguist-generated`) start collapsed and are marked viewed automatically

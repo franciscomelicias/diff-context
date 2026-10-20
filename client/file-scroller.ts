@@ -1,9 +1,7 @@
-import { useRef, type RefObject } from "react";
-import type { FlatList } from "react-native";
-import { boxOf } from "./web";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import type { ScrollView } from "react-native";
+import { boxOf, canObserveNear, nearObserver, type NearObserver } from "./web";
 
-const STEP_DELAY_MS = 80;
-const MAX_STEPS = 40;
 // Diffs above the target may still be loading and push it down; re-aim while the user has not scrolled.
 const SETTLE_DELAYS_MS = [250, 700];
 
@@ -13,64 +11,93 @@ interface FileNodes {
 }
 
 /**
- * Scrolls a file's header to the top from the rendered DOM. The list's own scrollToIndex trusts row offsets
- * measured before the diffs above finished loading, so it lands short; a file that is not rendered yet is
- * reached by scrolling past the rendered window in steps until it mounts.
+ * Every file is in the DOM, but a file loads its diff only once its body comes near the screen. Positions
+ * are always read from the rendered DOM, so hiding, collapsing or loading files never leaves them stale.
  */
-export function useFileScroller(listRef: RefObject<FlatList<unknown> | null>, order: string[]) {
+export function useFileScroller(scrollRef: RefObject<ScrollView | null>, order: string[]) {
   const nodes = useRef(new Map<string, FileNodes>());
+  // One stable ref callback per node: a new one each render would detach and re-observe every file.
+  const refs = useRef(new Map<string, (node: unknown) => void>());
+  const observer = useRef<NearObserver | null>(null);
+  const loaded = useRef(new Set<string>());
+  const [near, setNear] = useState<ReadonlySet<string>>(new Set());
   const job = useRef(0);
-  const latestOrder = useRef(order);
-  latestOrder.current = order;
 
-  const register = (path: string, part: keyof FileNodes) => (node: unknown) => {
-    const entry = nodes.current.get(path) ?? { header: null, body: null };
-    entry[part] = node;
-    if (entry.header || entry.body) nodes.current.set(path, entry);
-    else nodes.current.delete(path);
+  const watch = (path: string, body: unknown) => {
+    if (loaded.current.has(path)) return;
+    observer.current?.observe(body, () => {
+      loaded.current.add(path);
+      setNear(new Set(loaded.current));
+    });
   };
 
-  const step = (path: string, id: number, attempt: number, align: boolean) => {
-    const list = listRef.current;
-    const container = list?.getScrollableNode() as { scrollTop: number } | undefined;
+  // Bodies mount before the scroll view gets its ref, so the observer starts here and picks them up.
+  useEffect(() => {
+    const created = nearObserver(scrollRef.current?.getScrollableNode());
+    observer.current = created;
+    for (const [path, entry] of nodes.current) if (entry.body) watch(path, entry.body);
+    return () => created?.disconnect();
+  }, [scrollRef]);
+
+  const register = (path: string, part: keyof FileNodes) => {
+    const id = `${part}:${path}`;
+    const existing = refs.current.get(id);
+    if (existing) return existing;
+    const ref = (node: unknown) => {
+      const entry = nodes.current.get(path) ?? { header: null, body: null };
+      if (part === "body" && entry.body) observer.current?.unobserve(entry.body);
+      entry[part] = node;
+      if (part === "body" && node) watch(path, node);
+      if (entry.header || entry.body) nodes.current.set(path, entry);
+      else nodes.current.delete(path);
+    };
+    refs.current.set(id, ref);
+    return ref;
+  };
+
+  const aim = (path: string, id: number, settle: boolean) => {
+    const scroll = scrollRef.current;
+    const container = scroll?.getScrollableNode() as { scrollTop: number } | undefined;
     const frame = boxOf(container);
-    if (id !== job.current || attempt > MAX_STEPS || !list || !container || !frame) return;
-    const offsetOf = (node: unknown) => container.scrollTop + (boxOf(node)?.top ?? 0) - frame.top;
-
     const target = nodes.current.get(path);
-    if (target?.header && target.body) {
-      if (!align) return;
-      const offset = Math.max(0, offsetOf(target.body) - (boxOf(target.header)?.height ?? 0));
-      list.scrollToOffset({ offset, animated: false });
-      for (const delay of SETTLE_DELAYS_MS) {
-        setTimeout(() => {
-          if (id !== job.current || Math.abs(container.scrollTop - offset) > 2) return;
-          const again = Math.max(0, offsetOf(target.body) - (boxOf(target.header)?.height ?? 0));
-          if (Math.abs(again - offset) > 2) step(path, id, MAX_STEPS, true);
-        }, delay);
-      }
-      return;
+    if (id !== job.current || !scroll || !container || !frame || !target?.header || !target.body) return;
+    // From the body: a stuck sticky header reports where it is pinned, not where it sits in the list.
+    const offsetOf = () =>
+      Math.max(0, container.scrollTop + (boxOf(target.body)?.top ?? 0) - frame.top - (boxOf(target.header)?.height ?? 0));
+    let aimed = offsetOf();
+    scroll.scrollTo({ y: aimed, animated: false });
+    if (!settle) return;
+    for (const delay of SETTLE_DELAYS_MS) {
+      setTimeout(() => {
+        if (id !== job.current || Math.abs(container.scrollTop - aimed) > 2) return;
+        aimed = offsetOf();
+        scroll.scrollTo({ y: aimed, animated: false });
+      }, delay);
     }
-
-    const files = latestOrder.current;
-    const mounted = files.filter((file) => nodes.current.get(file)?.body);
-    const first = mounted[0];
-    const last = mounted.at(-1);
-    if (!first || !last) return;
-    const below = files.indexOf(path) > files.indexOf(last);
-    const edge = nodes.current.get(below ? last : first)?.body;
-    const offset = below ? offsetOf(edge) + (boxOf(edge)?.height ?? 0) : offsetOf(edge) - frame.height;
-    list.scrollToOffset({ offset: Math.max(0, offset), animated: false });
-    setTimeout(() => step(path, id, attempt + 1, align), STEP_DELAY_MS);
   };
 
-  /** `align: false` only brings the file into the rendered window (a search match then centres its own line). */
-  const scrollToFile = (path: string, align = true) => {
+  /** `settle: false` scrolls once (a search match then centres its own line). */
+  const scrollToFile = (path: string, settle = true) => {
     job.current += 1;
     const id = job.current;
     // After the state change that triggered the jump (open, collapse) has rendered.
-    requestAnimationFrame(() => step(path, id, 0, align));
+    requestAnimationFrame(() => aim(path, id, settle));
   };
 
-  return { register, scrollToFile };
+  /** The file whose body is under the sticky header at the top of the list. */
+  const fileAtTop = () => {
+    const frame = boxOf(scrollRef.current?.getScrollableNode());
+    if (!frame) return null;
+    return (
+      order.find((path) => {
+        const entry = nodes.current.get(path);
+        const body = boxOf(entry?.body);
+        return body !== null && body.top + body.height > frame.top + (boxOf(entry?.header)?.height ?? 0) + 1;
+      }) ?? null
+    );
+  };
+
+  const isNear = (path: string) => !canObserveNear || near.has(path);
+
+  return { register, scrollToFile, fileAtTop, isNear };
 }

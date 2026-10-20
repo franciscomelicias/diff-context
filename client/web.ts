@@ -23,6 +23,12 @@ declare const document:
       removeEventListener(type: "mousedown", listener: (event: { target: unknown }) => void, options?: { capture?: boolean }): void;
     }
   | undefined;
+declare const IntersectionObserver:
+  | (new (
+      callback: (entries: { target: unknown; isIntersecting: boolean }[]) => void,
+      options: { root: unknown; rootMargin: string },
+    ) => { observe(target: unknown): void; unobserve(target: unknown): void; disconnect(): void })
+  | undefined;
 
 export async function copyText(text: string): Promise<boolean> {
   if (Platform.OS !== "web" || typeof navigator === "undefined" || !navigator.clipboard) return false;
@@ -43,7 +49,7 @@ export function listenShortcuts(handler: (key: string) => boolean): () => void {
   return () => document.removeEventListener("keydown", listener);
 }
 
-/** Cmd/Ctrl+F, caught before the browser's own find (which misses files scrolled out of the virtualised list). */
+/** Cmd/Ctrl+F, caught before the browser's own find (which misses diffs not loaded yet). */
 export function listenFind(handler: () => void): () => void {
   if (Platform.OS !== "web" || typeof document === "undefined") return () => {};
   const listener = (event: KeyEvent) => {
@@ -81,6 +87,43 @@ export function scrollIntoView(node: unknown) {
 export function boxOf(node: unknown): { top: number; height: number } | null {
   const element = node as { getBoundingClientRect?: () => { top: number; height: number } } | null;
   return element?.getBoundingClientRect ? element.getBoundingClientRect() : null;
+}
+
+export const canObserveNear = typeof IntersectionObserver !== "undefined";
+
+export interface NearObserver {
+  observe(node: unknown, onNear: () => void): void;
+  unobserve(node: unknown): void;
+  disconnect(): void;
+}
+
+/** Calls each node's `onNear` once, the first time it comes within one screen of `root`'s visible area. */
+export function nearObserver(root: unknown): NearObserver | null {
+  if (typeof IntersectionObserver === "undefined" || !root) return null;
+  const handlers = new Map<unknown, () => void>();
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        const handler = handlers.get(entry.target);
+        if (!entry.isIntersecting || !handler) continue;
+        handlers.delete(entry.target);
+        observer.unobserve(entry.target);
+        handler();
+      }
+    },
+    { root, rootMargin: "100% 0px" },
+  );
+  return {
+    observe: (node, onNear) => {
+      handlers.set(node, onNear);
+      observer.observe(node);
+    },
+    unobserve: (node) => {
+      handlers.delete(node);
+      observer.unobserve(node);
+    },
+    disconnect: () => observer.disconnect(),
+  };
 }
 
 /** Calls `handler` on a mouse press outside `node`, or on Escape. */

@@ -1,5 +1,5 @@
 import { useState, type Ref } from "react";
-import { Image, Pressable, Text, View } from "react-native";
+import { Image, Pressable, Text, View, type ViewStyle } from "react-native";
 import type { ChangedFile, DiffMode, EditorId, ReviewThread } from "../shared/diff";
 import type { SyntaxSet } from "./colors";
 import { EDITOR_ICONS } from "./editor-icons";
@@ -9,6 +9,8 @@ import { copyText } from "./web";
 
 // GitHub also holds back big diffs until asked, so opening every file stays fast.
 const LARGE_DIFF_LINES = 800;
+// Rough height of a not yet loaded diff, so the scrollbar is close before it loads.
+const ESTIMATED_LINE_HEIGHT = 20;
 
 /**
  * A file's header row. The panel renders it as its own ScrollView child so it can be a native sticky
@@ -113,6 +115,7 @@ export function FileBody({
   viewMode,
   open,
   current,
+  near,
   since,
   ignoreWhitespace,
   threads,
@@ -129,6 +132,8 @@ export function FileBody({
   viewMode: ViewMode;
   open: boolean;
   current: boolean;
+  /** Near the screen at least once: only then is the diff fetched and rendered. */
+  near: boolean;
   since: string | null;
   ignoreWhitespace: boolean;
   threads: ReviewThread[];
@@ -141,12 +146,16 @@ export function FileBody({
 }) {
   if (!open) return <View ref={bodyRef} style={styles.fileGap} />;
   const size = file.additions + file.deletions;
+  const estimate = Math.min(size, LARGE_DIFF_LINES) * ESTIMATED_LINE_HEIGHT;
+  const gated = size > LARGE_DIFF_LINES && !loadLarge;
   return (
-    <View ref={bodyRef} style={[styles.fileBody, current ? styles.fileCurrent : null]}>
-      {size > LARGE_DIFF_LINES && !loadLarge ? (
+    <View ref={bodyRef} style={[styles.fileBody, offscreenSkipped(estimate), current ? styles.fileCurrent : null]}>
+      {gated ? (
         <Pressable accessibilityRole="button" style={styles.largeDiff} onPress={onLoadLarge}>
           <Text style={styles.link}>Large diff ({size} changed lines) · Load diff</Text>
         </Pressable>
+      ) : !near ? (
+        <View style={{ height: estimate }} />
       ) : (
         <FileDiff
           directory={directory}
@@ -163,6 +172,11 @@ export function FileBody({
       )}
     </View>
   );
+}
+
+/** The browser skips layout and paint of a diff while it is off screen, keeping its last size meanwhile. */
+function offscreenSkipped(estimate: number): ViewStyle {
+  return { contentVisibility: "auto", containIntrinsicSize: `auto ${estimate}px` } as ViewStyle;
 }
 
 /** Tight row of editor icons; only installed editors are listed. */

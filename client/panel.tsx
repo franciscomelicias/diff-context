@@ -2,8 +2,8 @@ import type { RpcOutput } from "@getpaseo/plugin";
 import type { PluginWorkspacePanelProps } from "@getpaseo/plugin/client";
 import { useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type ReactElement, type RefObject } from "react";
-import { FlatList, Pressable, Text, TextInput, View, type ViewToken } from "react-native";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
+import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { editorsRpc, filesRpc, openInEditorRpc, openProjectInEditorRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
 import { AskContext, useAskAgent } from "./ask";
 import { readableSyntax } from "./colors";
@@ -33,13 +33,6 @@ const SHORTCUTS: [string, string][] = [
 
 type FilesData = RpcOutput<typeof filesRpc>;
 
-/** One row of the virtualised list: each file is a sticky header row followed by its body. */
-interface ListItem {
-  key: string;
-  element: ReactElement;
-  filePath: string | null;
-}
-
 export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePanelProps) {
   const directory = useWorkspace(workspaceId, (workspace) => workspace.directory);
   const listFiles = useRpc(filesRpc);
@@ -55,7 +48,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
   const [showFull, setShowFull] = useState<Record<string, boolean>>({});
   const [loadLarge, setLoadLarge] = useState<Record<string, boolean>>({});
-  const listRef = useRef<FlatList<ListItem>>(null);
+  const scrollRef = useRef<ScrollView>(null);
   const searchRef = useRef<TextInput>(null);
   const diffSearchRef = useRef<TextInput>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,7 +107,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
     return !hiddenTest && !hiddenGenerated && !hiddenTranslation;
   });
   const ask = useAskAgent(workspaceId, data?.compareLabel ?? "", navigation);
-  const { register, scrollToFile } = useFileScroller(listRef as RefObject<FlatList<unknown> | null>, fileList.map((file) => file.path));
+  const { register, scrollToFile, fileAtTop, isNear } = useFileScroller(scrollRef, fileList.map((file) => file.path));
   // Known from any mode's listing, so the toggle stays put while switching between them.
   const stackInfo = data?.stack ?? latest.data?.stack ?? null;
   // A "!" prefix records an explicit untick, so an unticked generated file is not auto-marked again.
@@ -163,23 +156,20 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
     setOpenOverrides(Object.fromEntries(fileList.map((file) => [file.path, allViewed])));
   };
 
-  const items: ListItem[] = [];
+  // Each file is a sticky header row followed by its body, as direct ScrollView children.
+  const items: ReactElement[] = [];
   const sticky: number[] = [];
   if (data) {
-    items.push({
-      key: "summary",
-      filePath: null,
-      element: (
-        <Text style={styles.summary}>
-          {data.compareLabel} · {fileList.length} files ·{" "}
-          <Text style={styles.additions}>+{fileList.reduce((sum, file) => sum + file.additions, 0)}</Text>{" "}
-          <Text style={styles.deletions}>−{fileList.reduce((sum, file) => sum + file.deletions, 0)}</Text>
-        </Text>
-      ),
-    });
+    items.push(
+      <Text key="summary" style={styles.summary}>
+        {data.compareLabel} · {fileList.length} files ·{" "}
+        <Text style={styles.additions}>+{fileList.reduce((sum, file) => sum + file.additions, 0)}</Text>{" "}
+        <Text style={styles.deletions}>−{fileList.reduce((sum, file) => sum + file.deletions, 0)}</Text>
+      </Text>,
+    );
   }
-  if (latest.error) items.push({ key: "error", filePath: null, element: <Text style={styles.error}>{String(latest.error)}</Text> });
-  if (data && fileList.length === 0) items.push({ key: "empty", filePath: null, element: <Text style={styles.muted}>No changes.</Text> });
+  if (latest.error) items.push(<Text key="error" style={styles.error}>{String(latest.error)}</Text>);
+  if (data && fileList.length === 0) items.push(<Text key="empty" style={styles.muted}>No changes.</Text>);
   if (directory) {
     for (const file of fileList) {
       const open = isOpen(file);
@@ -188,56 +178,51 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
       const changed = changedSinceViewed(file);
       const fileThreads = threadsByPath.get(file.path) ?? [];
       sticky.push(items.length);
-      items.push({
-        key: `h:${file.path}`,
-        filePath: file.path,
-        element: (
-          <FileHeaderRow
-            file={file}
-            open={open}
-            current={current}
-            viewed={isViewed(file)}
-            changedSinceViewed={changed}
-            canShowSince={blob !== null}
-            showFull={showFull[file.path] === true}
-            threadCount={fileThreads.filter((thread) => !thread.isResolved).length}
-            editors={editors.data?.editors ?? []}
-            onOpenInEditor={(editor) => void openInEditor({ directory, mode, path: file.path, editor })}
-            onThreadsPress={() => {
-              const first = fileThreads.find((thread) => !thread.isResolved) ?? fileThreads[0];
-              if (first) showThread(workspaceId, first.id);
-            }}
-            onToggleOpen={() => setOpenOverrides({ ...openOverrides, [file.path]: !open })}
-            onToggleViewed={() => toggleViewed(file)}
-            onToggleFull={() => setShowFull({ ...showFull, [file.path]: !showFull[file.path] })}
-            headerRef={register(file.path, "header")}
-            styles={styles}
-          />
-        ),
-      });
-      items.push({
-        key: `b:${file.path}`,
-        filePath: file.path,
-        element: (
-          <FileBody
-            directory={directory}
-            mode={mode}
-            file={file}
-            viewMode={prefs.viewMode}
-            open={open}
-            current={current}
-            since={changed && blob && !showFull[file.path] ? blob : null}
-            ignoreWhitespace={prefs.hideWhitespace}
-            threads={fileThreads}
-            loadLarge={loadLarge[file.path] === true}
-            onLoadLarge={() => setLoadLarge({ ...loadLarge, [file.path]: true })}
-            commentsKey={commentKey(workspaceId, mode)}
-            syntax={syntax}
-            bodyRef={register(file.path, "body")}
-            styles={styles}
-          />
-        ),
-      });
+      items.push(
+        <FileHeaderRow
+          key={`h:${file.path}`}
+          file={file}
+          open={open}
+          current={current}
+          viewed={isViewed(file)}
+          changedSinceViewed={changed}
+          canShowSince={blob !== null}
+          showFull={showFull[file.path] === true}
+          threadCount={fileThreads.filter((thread) => !thread.isResolved).length}
+          editors={editors.data?.editors ?? []}
+          onOpenInEditor={(editor) => void openInEditor({ directory, mode, path: file.path, editor })}
+          onThreadsPress={() => {
+            const first = fileThreads.find((thread) => !thread.isResolved) ?? fileThreads[0];
+            if (first) showThread(workspaceId, first.id);
+          }}
+          onToggleOpen={() => setOpenOverrides({ ...openOverrides, [file.path]: !open })}
+          onToggleViewed={() => toggleViewed(file)}
+          onToggleFull={() => setShowFull({ ...showFull, [file.path]: !showFull[file.path] })}
+          headerRef={register(file.path, "header")}
+          styles={styles}
+        />,
+      );
+      items.push(
+        <FileBody
+          key={`b:${file.path}`}
+          directory={directory}
+          mode={mode}
+          file={file}
+          viewMode={prefs.viewMode}
+          open={open}
+          current={current}
+          near={isNear(file.path)}
+          since={changed && blob && !showFull[file.path] ? blob : null}
+          ignoreWhitespace={prefs.hideWhitespace}
+          threads={fileThreads}
+          loadLarge={loadLarge[file.path] === true}
+          onLoadLarge={() => setLoadLarge({ ...loadLarge, [file.path]: true })}
+          commentsKey={commentKey(workspaceId, mode)}
+          syntax={syntax}
+          bodyRef={register(file.path, "body")}
+          styles={styles}
+        />,
+      );
     }
   }
 
@@ -255,13 +240,6 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
     setCurrentPath(match.path);
     scrollToFile(match.path, false);
   };
-  // FlatList wants one stable callback; the latest file list is read through a ref.
-  const latestItems = useRef(items);
-  latestItems.current = items;
-  const onViewable = useRef(({ viewableItems }: { viewableItems: ViewToken<ListItem>[] }) => {
-    const first = viewableItems.find((token) => token.item?.filePath);
-    if (first?.item?.filePath) setCurrentPath(first.item.filePath);
-  });
 
   // Shortcuts read the latest render's state through a ref, so the listener is registered once.
   const shortcut = useRef<(key: string) => boolean>(() => false);
@@ -390,26 +368,20 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
               styles={styles}
             />
           ) : null}
-          {/* Virtualised: only files on or near the screen are rendered and loaded. */}
-          <FlatList
-            ref={listRef}
+          {/* Not virtualised: a virtual list caches row offsets that go stale on web when rows above them change. */}
+          <ScrollView
+            ref={scrollRef}
             style={styles.main}
             contentContainerStyle={styles.content}
-            data={items}
-            keyExtractor={(item) => item.key}
-            renderItem={({ item }) => item.element}
             stickyHeaderIndices={sticky}
-            initialNumToRender={8}
-            maxToRenderPerBatch={6}
-            windowSize={9}
-            onViewableItemsChanged={onViewable.current}
-            viewabilityConfig={{ itemVisiblePercentThreshold: 1 }}
-            onScrollToIndexFailed={(info) => {
-              // Unmeasured rows: jump near the target first, then aim precisely once it is rendered.
-              listRef.current?.scrollToOffset({ offset: info.averageItemLength * info.index, animated: false });
-              setTimeout(() => listRef.current?.scrollToIndex({ index: info.index, animated: true, viewPosition: 0 }), 150);
+            scrollEventThrottle={50}
+            onScroll={() => {
+              const path = fileAtTop();
+              if (path) setCurrentPath(path);
             }}
-          />
+          >
+            {items}
+          </ScrollView>
         </View>
       </View>
       </SearchContext.Provider>
