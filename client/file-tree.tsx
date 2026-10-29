@@ -1,7 +1,10 @@
-import { useState, type RefObject } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { useMemo, useRef, useState, type RefObject } from "react";
+import { PanResponder, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import type { ChangedFile } from "../shared/diff";
 import type { Styles } from "./styles";
+
+const MIN_WIDTH = 160;
+const MAX_WIDTH = 800;
 
 interface TreeNode {
   name: string;
@@ -14,6 +17,8 @@ export function FileTree({
   files,
   isViewed,
   currentPath,
+  width,
+  onResize,
   onSelect,
   searchRef,
   styles,
@@ -21,6 +26,9 @@ export function FileTree({
   files: ChangedFile[];
   isViewed: (file: ChangedFile) => boolean;
   currentPath: string | null;
+  width: number;
+  /** Called once the drag ends, so the width is saved once and not on every move. */
+  onResize: (width: number) => void;
   onSelect: (file: ChangedFile) => void;
   searchRef: RefObject<TextInput | null>;
   styles: Styles;
@@ -28,6 +36,22 @@ export function FileTree({
   const [query, setQuery] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<"all" | "unviewed">("all");
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  // The responder is created once, so it reads the latest props through a ref.
+  const latest = useRef({ width, onResize });
+  latest.current = { width, onResize };
+  const resizer = useMemo(() => {
+    const widthAfter = (dx: number) => Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, latest.current.width + dx));
+    return PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onPanResponderMove: (_, gesture) => setDragWidth(widthAfter(gesture.dx)),
+      onPanResponderRelease: (_, gesture) => {
+        latest.current.onResize(widthAfter(gesture.dx));
+        setDragWidth(null);
+      },
+      onPanResponderTerminate: () => setDragWidth(null),
+    });
+  }, []);
   const terms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const visible = files
     .filter((file) => filter === "all" || !isViewed(file))
@@ -72,7 +96,7 @@ export function FileTree({
   };
 
   return (
-    <View style={styles.treePane}>
+    <View style={[styles.treePane, { width: dragWidth ?? width }]}>
       <TextInput
         ref={searchRef}
         value={query}
@@ -92,6 +116,7 @@ export function FileTree({
         {root.children.map((child) => renderNode(child, 0))}
         {visible.length === 0 ? <Text style={[styles.muted, { padding: 8 }]}>No matching files.</Text> : null}
       </ScrollView>
+      <View accessibilityLabel="Resize file tree" style={styles.treeResizeHandle} {...resizer.panHandlers} />
     </View>
   );
 }

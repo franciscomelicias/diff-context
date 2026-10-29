@@ -1,7 +1,7 @@
 {
   "name": "diff-context",
   "private": true,
-  "version": "1.4.2",
+  "version": "1.5.0",
   "files": [
     "paseo-plugin.json",
     "index.client.ts",

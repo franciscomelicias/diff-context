@@ -2,6 +2,22 @@ import { defineRpc } from "@getpaseo/plugin";
 import { z } from "zod";
 
 /** branch = this branch's own changes (one layer when stacked); stack = every layer up to here vs the trunk. */
+/** Keep in step with package.json; a release is the git tag `v<version>`. */
+export const PLUGIN_VERSION = "1.5.0";
+
+/** Orders "X.Y.Z" versions: negative when `a` is older. */
+export function compareVersions(a: string, b: string): number {
+  const [x, y] = [a, b].map((version) => version.split(".").map(Number));
+  return x[0] - y[0] || x[1] - y[1] || x[2] - y[2];
+}
+
+/** Newest `vX.Y.Z` tag on GitHub, so the panel can say an update is out. */
+export const latestVersionRpc = defineRpc({
+  name: "version.latest",
+  input: z.object({}),
+  output: z.object({ latest: z.string().nullable() }),
+});
+
 export const modeSchema = z.enum(["uncommitted", "branch", "stack"]);
 export type DiffMode = z.infer<typeof modeSchema>;
 

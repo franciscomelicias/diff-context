@@ -9,6 +9,7 @@ export interface Prefs {
   syntaxTheme: string;
   zoom: number;
   showTree: boolean;
+  treeWidth: number;
   hideTests: boolean;
   hideGenerated: boolean;
   hideTranslations: boolean;
@@ -21,6 +22,7 @@ export const DEFAULT_PREFS: Prefs = {
   syntaxTheme: "one",
   zoom: 1,
   showTree: true,
+  treeWidth: 260,
   hideTests: false,
   hideGenerated: false,
   hideTranslations: false,

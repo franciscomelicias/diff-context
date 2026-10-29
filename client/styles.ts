@@ -81,7 +81,18 @@ export function createStyles(colors: Colors, zoom = 1) {
     additions: { color: colors.statusSuccess, fontSize: 12, fontWeight: "600" as const },
     deletions: { color: colors.statusDanger, fontSize: 12, fontWeight: "600" as const },
 
-    treePane: { width: 260, minHeight: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface0 },
+    treePane: { minHeight: 0, borderRightWidth: 1, borderRightColor: colors.border, backgroundColor: colors.surface0 },
+    treeResizeHandle: {
+      position: "absolute" as const,
+      top: 0,
+      bottom: 0,
+      right: -3,
+      width: 6,
+      zIndex: 1,
+      // react-native-web passes any CSS cursor through; React Native's types only list auto and pointer.
+      cursor: "col-resize" as unknown as "pointer",
+      userSelect: "none" as const,
+    },
     treeScroll: { flex: 1, minHeight: 0 },
     treeFilter: { flexDirection: "row" as const, gap: 6, padding: 8 },
     treeItem: { flexDirection: "row" as const, alignItems: "center" as const, gap: 6, paddingVertical: 3, paddingRight: 8 },

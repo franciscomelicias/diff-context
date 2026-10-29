@@ -4,7 +4,7 @@ import { useRpc, useWorkspace } from "@getpaseo/plugin/client";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { editorsRpc, filesRpc, openInEditorRpc, openProjectInEditorRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
+import { editorsRpc, filesRpc, latestVersionRpc, openInEditorRpc, openProjectInEditorRpc, palettesRpc, threadsRpc, type ChangedFile, type DiffMode, type ReviewThread, type SearchMatch } from "../shared/diff";
 import { AskContext, useAskAgent } from "./ask";
 import { readableSyntax } from "./colors";
 import { commentKey } from "./comments";
@@ -39,6 +39,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
   const loadPalettes = useRpc(palettesRpc);
   const listThreads = useRpc(threadsRpc);
   const listEditors = useRpc(editorsRpc);
+  const loadLatestVersion = useRpc(latestVersionRpc);
   const openInEditor = useRpc(openInEditorRpc);
   const openProjectInEditor = useRpc(openProjectInEditorRpc);
   const [prefs, setPrefs] = usePrefs();
@@ -56,6 +57,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
   const styles = useMemo(() => createStyles(theme.colors, prefs.zoom), [theme, prefs.zoom]);
 
   const editors = useQuery({ queryKey: ["diff-editors"], queryFn: () => listEditors({}), staleTime: Infinity });
+  const latestVersion = useQuery({ queryKey: ["diff-latest-version"], queryFn: () => loadLatestVersion({}), staleTime: 60 * 60 * 1000 });
   const palettes = useQuery({ queryKey: ["diff-palettes"], queryFn: () => loadPalettes({}), staleTime: Infinity });
   const scheme = isDark(theme.colors.surface0) ? "dark" : "light";
   const rawSyntax = palettes.data?.palettes[prefs.syntaxTheme]?.[scheme];
@@ -308,6 +310,7 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
           fileCount={fileList.length}
           hidden={hidden}
           themes={palettes.data?.themes ?? null}
+          latestVersion={latestVersion.data?.latest ?? null}
           allViewed={allViewed}
           anyClosed={fileList.some((file) => !isOpen(file))}
           loading={latest.isFetching}
@@ -363,6 +366,8 @@ export function DiffPanel({ workspaceId, theme, navigation }: PluginWorkspacePan
               files={fileList}
               isViewed={isViewed}
               currentPath={currentPath}
+              width={prefs.treeWidth}
+              onResize={(treeWidth) => setPrefs({ treeWidth })}
               onSelect={jumpTo}
               searchRef={searchRef}
               styles={styles}

@@ -1,7 +1,7 @@
 import type { RpcOutput } from "@getpaseo/plugin";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
-import type { DiffMode, EditorId, filesRpc } from "../shared/diff";
+import { compareVersions, PLUGIN_VERSION, type DiffMode, type EditorId, type filesRpc } from "../shared/diff";
 import { EditorButtons } from "./file-card";
 import type { Prefs } from "./prefs";
 import type { Styles } from "./styles";
@@ -28,6 +28,7 @@ export function Toolbar({
   fileCount,
   hidden,
   themes,
+  latestVersion,
   allViewed,
   anyClosed,
   loading,
@@ -50,6 +51,8 @@ export function Toolbar({
   /** How many files each active filter hides. */
   hidden: { tests: number; generated: number; translations: number };
   themes: { id: string; label: string }[] | null;
+  /** Newest release on GitHub; null until known or when offline. */
+  latestVersion: string | null;
   allViewed: boolean;
   anyClosed: boolean;
   loading: boolean;
@@ -170,6 +173,13 @@ export function Toolbar({
           <Text style={styles.toolbarLink}>{anyClosed ? "▾ Expand all" : "▸ Collapse all"}</Text>
         </Pressable>
         <IconButton label="⌨" hint="Keyboard shortcuts" onPress={onHelp} styles={styles} />
+        {latestVersion && compareVersions(latestVersion, PLUGIN_VERSION) > 0 ? (
+          <Text style={styles.tabActive} accessibilityHint="git pull in the plugin folder, then npm install and paseo plugin reload diff-context">
+            v{PLUGIN_VERSION} · v{latestVersion} available
+          </Text>
+        ) : (
+          <Text style={styles.toolbarMuted}>v{PLUGIN_VERSION}</Text>
+        )}
       </View>
     </View>
   );

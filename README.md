@@ -13,11 +13,12 @@ A GitHub-style diff panel for any git workspace. Open it with the **Diff** butto
 - **Filters** menu: hide whitespace changes, tests, generated files or translations (`translations/*.json`, `i18n/messages_*.properties`, `locales/`), colour theme
 - **Search** the whole diff (⌘F): match count, Enter / Shift+Enter to jump between matches
 - Open a file at its first change (file header) or the whole project (top bar) in IntelliJ IDEA, Zed or VS Code; icons only for the editors installed
-- File tree with a filter box, renames shown as `old → new`; clicking a file jumps to it
+- File tree with a filter box, renames shown as `old → new`; clicking a file jumps to it. Drag its right edge to widen it for long file names (width remembered)
 - Comments: click or drag over line numbers (Shift+click extends), "Suggest change" inserts a ```suggestion block; send the comments to a Paseo agent in the same format as Paseo's built-in review (the send bar stays pinned at the top). Unsent comments survive restarts
 - **✦ Ask AI** on selected lines: sends them with your question to an "Ask about diff" chat in the workspace
 - GitHub PR review threads: click 💬 on a line to open its thread under it, then **Reply on GitHub**, **Add comment** (a follow-up for the agent that quotes the thread, not posted to GitHub) or **✦ Ask AI**. The 💬 count in a file header opens the **PR comments** side panel. Fetched on open and on refresh only
 - A banner when the diff changed since you loaded it, with an **Update** button
+- The installed version shows at the end of the toolbar, with a notice when a newer `vX.Y.Z` tag is on GitHub (checked at most once an hour)
 - Shortcuts: `↓`/`↑` (or `j`/`k`) next/previous file, `v` viewed, `o` open/collapse, `/` filter files, `⌘F` search, `?` help
 
 ## Requirements
@@ -47,4 +48,5 @@ If `paseo` is not on your PATH, use `/Applications/Paseo.app/Contents/Resources/
 - Logs: `paseo plugin logs diff-context`
 - Viewed state, settings and unsent comments: `~/.cache/diff-context/` (`viewed.json`, `prefs.json`, `drafts.json`)
 - "+ New agent" when sending comments uses `claude/claude-opus-5-5` (`client/send-bar.tsx`); Ask AI uses `claude/claude-sonnet-5-5` (`client/ask.ts`)
+- Release: bump `PLUGIN_VERSION` in `shared/diff.ts` and `version` in `package.json`, push, then tag `vX.Y.Z` and create the GitHub release
 - Generated / test file patterns: `GENERATED` and `TESTS` in `server/diff.ts`

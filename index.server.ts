@@ -3,6 +3,7 @@ import { fileDiff, listFiles, palettes, searchDiff } from "./server/diff";
 import { listEditors, openInEditor, openProjectInEditor } from "./server/editors";
 import { storeGet, storeSet } from "./server/store";
 import { listThreads, replyToThread } from "./server/threads";
+import { latestVersion } from "./server/version";
 import { getViewed, setViewed } from "./server/viewed";
 import {
   editorsRpc,
@@ -10,6 +11,7 @@ import {
   openInEditorRpc,
   openProjectInEditorRpc,
   filesRpc,
+  latestVersionRpc,
   palettesRpc,
   searchRpc,
   storeGetRpc,
@@ -34,5 +36,6 @@ export default function contribute(server: PluginServerContext) {
   server.handle(threadReplyRpc, replyToThread);
   server.handle(storeGetRpc, storeGet);
   server.handle(storeSetRpc, storeSet);
+  server.handle(latestVersionRpc, latestVersion);
   return () => {};
 }
