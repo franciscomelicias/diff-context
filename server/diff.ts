@@ -453,7 +453,7 @@ async function readLocalStacks(
 }
 
 async function defaultBranch(directory: string): Promise<string> {
-  const ref = await git(directory, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).catch(() => "origin/develop");
+  const ref = await git(directory, ["symbolic-ref", "--short", "refs/remotes/origin/HEAD"]).catch(() => "origin/main");
   return ref.replace(/^origin\//, "");
 }
 
